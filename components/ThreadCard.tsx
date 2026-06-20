@@ -16,18 +16,18 @@ interface Props {
 
 const SEVERITY_STYLES = {
   escalate: {
-    badge: 'bg-red-950 text-red-400 border border-red-800',
-    card: 'border-l-4 border-l-red-500 border border-red-900 bg-gray-900',
+    badge: 'bg-red-50 text-red-600 border border-red-200',
+    card: 'border-l-4 border-l-red-500 border border-red-100 bg-white',
     label: 'Escalate',
   },
   watch: {
-    badge: 'bg-amber-950 text-amber-400 border border-amber-800',
-    card: 'border-l-4 border-l-amber-400 border border-amber-900 bg-gray-900',
+    badge: 'bg-amber-50 text-amber-700 border border-amber-200',
+    card: 'border-l-4 border-l-amber-400 border border-amber-100 bg-white',
     label: 'Follow-up',
   },
   noise: {
-    badge: 'bg-gray-800 text-gray-400 border border-gray-700',
-    card: 'border border-gray-800 bg-gray-900',
+    badge: 'bg-slate-100 text-slate-500 border border-slate-200',
+    card: 'border border-slate-200 bg-white',
     label: 'Noise',
   },
 }
@@ -124,11 +124,9 @@ export default function ThreadCard({
   const canDispatch = (effectiveSeverity === 'escalate' || effectiveSeverity === 'watch') && thread.status !== 'dismissed'
 
   return (
-    // Outer div is a layout container only — not interactive itself.
-    // The <button> below handles selection; actions are siblings, not nested inside it.
-    <div className={`rounded-xl mb-3 ${styles.card} ${selected ? 'ring-2 ring-cyan-400' : ''}`}>
+    <div className={`rounded-xl mb-3 shadow-sm ${styles.card} ${selected ? 'ring-2 ring-sky-400' : ''}`}>
 
-      {/* Selection trigger — a proper <button> wrapping only the non-interactive header */}
+      {/* Selection trigger */}
       <button
         type="button"
         className="w-full text-left px-4 pt-4 pb-0"
@@ -140,38 +138,37 @@ export default function ThreadCard({
             {styles.label}
             {thread.overriddenSeverity && <span className="ml-1 opacity-60">·override</span>}
           </span>
-          <span className="text-xs text-gray-500">
-            confidence: {thread.confidence} · {thread.signalIds.length} signal{thread.signalIds.length > 1 ? 's' : ''}
+          <span className="text-xs text-slate-400">
+            {thread.confidence} confidence · {thread.signalIds.length} signal{thread.signalIds.length > 1 ? 's' : ''}
           </span>
           {thread.status === 'approved' && (
-            <span className="ml-auto text-xs text-green-400 font-medium">✓ approved</span>
+            <span className="ml-auto text-xs text-green-600 font-semibold">✓ approved</span>
           )}
           {thread.status === 'dismissed' && (
-            <span className="ml-auto text-xs text-gray-600">dismissed</span>
+            <span className="ml-auto text-xs text-slate-400">dismissed</span>
           )}
         </div>
 
         {/* Hypothesis */}
-        <p className="text-sm font-semibold text-gray-100 mb-1 leading-snug">{thread.hypothesis}</p>
+        <p className="text-sm font-semibold text-slate-800 mb-1 leading-snug">{thread.hypothesis}</p>
 
         {/* Recommendation */}
-        <p className="text-xs text-gray-400 mb-3">→ {thread.recommendation}</p>
+        <p className="text-xs text-slate-500 mb-3">→ {thread.recommendation}</p>
 
         {/* Signal chips */}
         <div className="flex flex-wrap gap-1 mb-3">
           {thread.signalIds.map(id => (
-            <span key={id} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">{id}</span>
+            <span key={id} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono border border-slate-200">{id}</span>
           ))}
         </div>
       </button>
 
-      {/* Detail area — outside the selection button, so no nesting issues */}
+      {/* Detail area */}
       <div className="px-4 pb-4">
-        {/* Noise: expand toggle */}
         {isNoise && !expanded && (
           <button
             type="button"
-            className="text-xs text-cyan-600 hover:text-cyan-400 mb-2"
+            className="text-xs text-sky-600 hover:text-sky-700 mb-2 font-medium"
             onClick={() => setExpanded(true)}
           >
             Show evidence →
@@ -181,20 +178,20 @@ export default function ThreadCard({
         {/* Evidence summary */}
         {showDetail && thread.evidence.length > 0 && (
           <div className="mb-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Evidence checked</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Evidence checked</p>
             <div className="space-y-1.5">
               {thread.evidence.map((item: EvidenceItem, i: number) => (
                 <div key={`${item.tool}-${i}`} className="flex gap-2 text-xs">
-                  <span className="font-semibold text-cyan-500 shrink-0 w-28">
+                  <span className="font-semibold text-sky-600 shrink-0 w-28">
                     {TOOL_NAMES[item.tool] ?? item.tool}
                   </span>
-                  <span className="text-gray-400">→ {getToolSummary(item.tool, item.result)}</span>
+                  <span className="text-slate-500">→ {getToolSummary(item.tool, item.result)}</span>
                 </div>
               ))}
             </div>
             <button
               type="button"
-              className="mt-2 text-xs text-gray-600 hover:text-gray-400"
+              className="mt-2 text-xs text-slate-400 hover:text-slate-600"
               onClick={() => setShowRawEvidence(v => !v)}
             >
               {showRawEvidence ? '▼ Hide raw trail' : '▶ Raw evidence trail'}
@@ -205,10 +202,10 @@ export default function ThreadCard({
 
         {/* Unknowns */}
         {showDetail && thread.unknowns.length > 0 && (
-          <div className="rounded-lg bg-amber-950 border border-amber-800 px-3 py-2.5 mb-3">
-            <p className="text-xs font-semibold text-amber-400 mb-1">⚠ Couldn&apos;t verify</p>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 mb-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1">⚠ Couldn&apos;t verify</p>
             {thread.unknowns.map((u) => (
-              <p key={u} className="text-xs text-amber-300 leading-snug">· {u}</p>
+              <p key={u} className="text-xs text-amber-700 leading-snug">· {u}</p>
             ))}
           </div>
         )}
@@ -217,10 +214,10 @@ export default function ThreadCard({
         {(thread.dispatchedMissions?.length ?? 0) > 0 && (
           <div className="mb-3 space-y-1.5">
             {thread.dispatchedMissions!.map(m => (
-              <div key={m.missionId} className="rounded-lg bg-blue-950 border border-blue-800 px-3 py-2">
-                <p className="text-xs font-semibold text-blue-400">{m.missionId} → {m.zone}</p>
+              <div key={m.missionId} className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2">
+                <p className="text-xs font-semibold text-sky-700">{m.missionId} → {m.zone}</p>
                 {m.observations.map((obs) => (
-                  <p key={obs} className="text-xs text-blue-300">· {obs}</p>
+                  <p key={obs} className="text-xs text-sky-600">· {obs}</p>
                 ))}
               </div>
             ))}
@@ -233,12 +230,12 @@ export default function ThreadCard({
             {thread.status !== 'approved' && (
               <button
                 type="button"
-                className="text-xs px-3 py-1 rounded-full border border-green-800 hover:bg-green-900 text-green-400 font-medium"
+                className="text-xs px-3 py-1 rounded-full border border-green-300 hover:bg-green-50 text-green-700 font-medium"
                 onClick={onApprove}
               >Approve</button>
             )}
             <select
-              className="text-xs px-2 py-1 rounded-full border border-gray-700 bg-gray-800 text-gray-300 cursor-pointer"
+              className="text-xs px-2 py-1 rounded-full border border-slate-200 bg-white text-slate-600 cursor-pointer"
               value={thread.overriddenSeverity ?? thread.severity}
               onChange={e => onChangeSeverity(e.target.value as Severity)}
             >
@@ -249,13 +246,13 @@ export default function ThreadCard({
             {canDispatch && !showDispatch && (
               <button
                 type="button"
-                className="text-xs px-3 py-1 rounded-full border border-blue-800 hover:bg-blue-900 text-blue-400 font-medium"
+                className="text-xs px-3 py-1 rounded-full border border-sky-300 hover:bg-sky-50 text-sky-700 font-medium"
                 onClick={() => setShowDispatch(true)}
               >Dispatch drone</button>
             )}
             <button
               type="button"
-              className="text-xs px-3 py-1 rounded-full border border-gray-700 hover:bg-gray-800 text-gray-500"
+              className="text-xs px-3 py-1 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-500"
               onClick={onDismiss}
             >Dismiss</button>
           </div>
@@ -264,7 +261,7 @@ export default function ThreadCard({
         {showDispatch && (
           <div className="mt-2 flex gap-2">
             <input
-              className="flex-1 text-xs border border-gray-700 rounded-full px-3 py-1 bg-gray-900 text-gray-200"
+              className="flex-1 text-xs border border-slate-200 rounded-full px-3 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-300"
               placeholder="zone, e.g. yard-b"
               value={dispatchZone}
               onChange={e => setDispatchZone(e.target.value)}
@@ -272,12 +269,12 @@ export default function ThreadCard({
             />
             <button
               type="button"
-              className="text-xs px-3 py-1 rounded-full bg-blue-700 hover:bg-blue-600 text-white font-medium"
+              className="text-xs px-3 py-1 rounded-full bg-sky-600 hover:bg-sky-700 text-white font-medium"
               onClick={() => { onDispatch(dispatchZone || 'yard-b', thread.recommendation); setShowDispatch(false) }}
             >Go</button>
             <button
               type="button"
-              className="text-xs text-gray-500 hover:text-gray-300"
+              className="text-xs text-slate-400 hover:text-slate-600"
               onClick={() => setShowDispatch(false)}
             >Cancel</button>
           </div>

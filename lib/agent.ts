@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk'
+import type { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/chat/completions'
 import { toolDefinitions, executeTool } from './tools'
 import { Signal, Thread, EvidenceItem } from './types'
 
@@ -38,7 +39,51 @@ const submitFindingsTool: Groq.Chat.ChatCompletionTool = {
   }
 }
 
+async function callGroq(
+  params: ChatCompletionCreateParamsNonStreaming
+): Promise<Groq.Chat.ChatCompletion> {
+  const MAX_RETRIES = 3
+  let lastErr: unknown
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await groq.chat.completions.create(params)
+    } catch (err) {
+      lastErr = err
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
+      }
+    }
+  }
+  throw lastErr
+}
+
+function fallbackThread(signals: Signal[], reason: string): Thread {
+  return {
+    id: `thread-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    signalIds: signals.map(s => s.id),
+    hypothesis: 'Investigation could not complete — API error.',
+    confidence: 'low',
+    severity: 'watch',
+    evidence: [],
+    unknowns: [`API error prevented investigation: ${reason}`],
+    recommendation: 'Manual review required.',
+    status: 'ai_draft',
+    dispatchedMissions: []
+  }
+}
+
 export async function investigateCluster(
+  signals: Signal[],
+  onToolCall?: (entry: string) => void
+): Promise<Thread> {
+  try {
+    return await runInvestigation(signals, onToolCall)
+  } catch (err) {
+    return fallbackThread(signals, String(err))
+  }
+}
+
+async function runInvestigation(
   signals: Signal[],
   onToolCall?: (entry: string) => void
 ): Promise<Thread> {
@@ -66,7 +111,7 @@ export async function investigateCluster(
   } | null = null
 
   for (let turn = 0; turn < 8; turn++) {
-    const response = await groq.chat.completions.create({
+    const response = await callGroq({
       model: 'llama-3.3-70b-versatile',
       messages,
       tools: allTools,
@@ -74,7 +119,7 @@ export async function investigateCluster(
     })
 
     const message = response.choices[0].message
-    messages.push(message as Groq.Chat.ChatCompletionMessageParam)
+    messages.push(message)
 
     if (!message.tool_calls || message.tool_calls.length === 0) break
 

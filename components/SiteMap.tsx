@@ -12,33 +12,33 @@ interface SiteMapProps {
 }
 
 const ZONE_SIZES: Record<string, { w: number; h: number }> = {
-  gate:         { w: 52,  h: 36 },
-  yard:         { w: 130, h: 95 },
-  restricted:   { w: 130, h: 95 },
-  building:     { w: 105, h: 68 },
-  access_point: { w: 42,  h: 30 },
-  service:      { w: 62,  h: 42 },
+  gate:         { w: 56,  h: 40  },
+  yard:         { w: 140, h: 100 },
+  restricted:   { w: 140, h: 100 },
+  building:     { w: 115, h: 75  },
+  access_point: { w: 46,  h: 34  },
+  service:      { w: 68,  h: 46  },
 }
 
-const ZONE_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
-  gate:         { fill: '#0e7490', stroke: '#22d3ee', text: '#cffafe' },
-  yard:         { fill: '#1e3a5f', stroke: '#3b82f6', text: '#bfdbfe' },
-  restricted:   { fill: '#78350f', stroke: '#f59e0b', text: '#fef3c7' },
-  building:     { fill: '#1f2937', stroke: '#6b7280', text: '#d1d5db' },
-  access_point: { fill: '#4c1d95', stroke: '#a78bfa', text: '#ede9fe' },
-  service:      { fill: '#111827', stroke: '#374151', text: '#9ca3af' },
+const ZONE_COLORS: Record<string, { fill: string; stroke: string; label: string }> = {
+  gate:         { fill: '#e0f2fe', stroke: '#0284c7', label: '#0c4a6e' },
+  yard:         { fill: '#dbeafe', stroke: '#3b82f6', label: '#1e3a8a' },
+  restricted:   { fill: '#fef3c7', stroke: '#d97706', label: '#78350f' },
+  building:     { fill: '#f1f5f9', stroke: '#64748b', label: '#1e293b' },
+  access_point: { fill: '#ede9fe', stroke: '#7c3aed', label: '#3b0764' },
+  service:      { fill: '#f9fafb', stroke: '#9ca3af', label: '#374151' },
 }
 
 function getSignalColor(signal: Signal, threads: Thread[], selectedThreadId: string | null): string {
   const thread = threads.find(t => t.signalIds.includes(signal.id))
-  if (!thread) return '#4b5563'
+  if (!thread) return '#94a3b8'
+  if (thread.id === selectedThreadId) return '#0284c7'
   const sev = thread.overriddenSeverity ?? thread.severity
-  if (thread.id === selectedThreadId) return '#ffffff'
   switch (sev) {
     case 'escalate': return '#ef4444'
     case 'watch':    return '#f59e0b'
-    case 'noise':    return '#6b7280'
-    default:         return '#4b5563'
+    case 'noise':    return '#64748b'
+    default:         return '#94a3b8'
   }
 }
 
@@ -52,22 +52,25 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
   const dronePolyline = droneWaypoints.map(p => `${p.x},${p.y}`).join(' ')
 
   return (
-    <svg viewBox="0 0 1000 700" className="w-full h-full" style={{ background: '#0f172a' }}>
+    <svg viewBox="0 0 1000 700" className="w-full h-full" style={{ background: '#f1f5f9' }}>
       {/* Grid */}
       {Array.from({ length: 10 }, (_, i) => (
-        <line key={`vg-${i}`} x1={i * 100} y1={0} x2={i * 100} y2={700} stroke="#1e293b" strokeWidth={0.5} />
+        <line key={`vg-${i}`} x1={i * 100} y1={0} x2={i * 100} y2={700} stroke="#e2e8f0" strokeWidth={1} />
       ))}
       {Array.from({ length: 7 }, (_, i) => (
-        <line key={`hg-${i}`} x1={0} y1={i * 100} x2={1000} y2={i * 100} stroke="#1e293b" strokeWidth={0.5} />
+        <line key={`hg-${i}`} x1={0} y1={i * 100} x2={1000} y2={i * 100} stroke="#e2e8f0" strokeWidth={1} />
       ))}
 
       {/* Site boundary */}
-      <rect x={30} y={30} width={940} height={640} fill="none" stroke="#334155" strokeWidth={2} strokeDasharray="8,4" rx={4} />
+      <rect x={30} y={30} width={940} height={640} fill="none" stroke="#94a3b8" strokeWidth={2} strokeDasharray="8,4" rx={4} />
 
       {/* Zone rectangles */}
       {zones.map(zone => {
         const size = ZONE_SIZES[zone.kind] ?? { w: 80, h: 50 }
         const colors = ZONE_COLORS[zone.kind] ?? ZONE_COLORS.building
+        const isActive = selectedThread?.signalIds.some(sid =>
+          signals.find(s => s.id === sid)?.zone === zone.id
+        )
         return (
           <g key={zone.id}>
             <rect
@@ -76,19 +79,19 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
               width={size.w}
               height={size.h}
               fill={colors.fill}
-              stroke={colors.stroke}
-              strokeWidth={1.5}
-              rx={3}
-              opacity={0.85}
+              stroke={isActive ? '#0284c7' : colors.stroke}
+              strokeWidth={isActive ? 2.5 : 1.5}
+              rx={4}
+              opacity={0.95}
             />
             <text
               x={zone.x}
-              y={zone.y - size.h / 2 - 4}
+              y={zone.y - size.h / 2 - 5}
               textAnchor="middle"
-              fill={colors.text}
-              fontSize={9}
+              fill={colors.label}
+              fontSize={9.5}
               fontFamily="monospace"
-              opacity={0.9}
+              fontWeight="600"
             >
               {zone.id}
             </text>
@@ -103,7 +106,7 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
         stroke="#3b82f6"
         strokeWidth={1.5}
         strokeDasharray="6,4"
-        opacity={0.5}
+        opacity={0.4}
       />
 
       {/* Dispatched drone route */}
@@ -111,10 +114,10 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
         <polyline
           points={newDroneRoute.map(p => `${p.x},${p.y}`).join(' ')}
           fill="none"
-          stroke="#22d3ee"
-          strokeWidth={2}
+          stroke="#0284c7"
+          strokeWidth={2.5}
           strokeDasharray="4,3"
-          opacity={0.8}
+          opacity={0.9}
         />
       )}
 
@@ -122,61 +125,73 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
       {signals.map(signal => {
         const color = getSignalColor(signal, threads, selectedThreadId)
         const isSelected = selectedSignalIds.has(signal.id)
-        const r = isSelected ? 10 : 7
+        const r = isSelected ? 13 : 9
         return (
           <g key={signal.id} onClick={() => onSelectSignal(signal.id)} style={{ cursor: 'pointer' }}>
-            {isSelected && (
-              <circle cx={signal.x} cy={signal.y} r={r + 6} fill={color} opacity={0.2} />
-            )}
+            {/* Shadow ring */}
+            <circle cx={signal.x} cy={signal.y} r={r + 5} fill={color} opacity={isSelected ? 0.2 : 0.1} />
+            {/* Pin body */}
             <circle
               cx={signal.x}
               cy={signal.y}
               r={r}
               fill={color}
-              stroke={isSelected ? '#ffffff' : color}
-              strokeWidth={isSelected ? 2 : 1}
-              opacity={0.9}
+              stroke="white"
+              strokeWidth={isSelected ? 2.5 : 1.5}
+              opacity={0.95}
             />
             {signal.type === 'badge_failure' && (
               <>
-                <line x1={signal.x - 4} y1={signal.y - 4} x2={signal.x + 4} y2={signal.y + 4} stroke="white" strokeWidth={1.5} />
-                <line x1={signal.x + 4} y1={signal.y - 4} x2={signal.x - 4} y2={signal.y + 4} stroke="white" strokeWidth={1.5} />
+                <line x1={signal.x - 4.5} y1={signal.y - 4.5} x2={signal.x + 4.5} y2={signal.y + 4.5} stroke="white" strokeWidth={2} />
+                <line x1={signal.x + 4.5} y1={signal.y - 4.5} x2={signal.x - 4.5} y2={signal.y + 4.5} stroke="white" strokeWidth={2} />
               </>
             )}
           </g>
         )
       })}
 
-      {/* Labels for selected thread's signals */}
+      {/* Labels for selected thread signals */}
       {signals.filter(s => selectedSignalIds.has(s.id)).map(signal => (
-        <text
-          key={`lbl-${signal.id}`}
-          x={signal.x + 12}
-          y={signal.y + 4}
-          fill="#ffffff"
-          fontSize={8}
-          fontFamily="monospace"
-          style={{ pointerEvents: 'none' }}
-        >
-          {signal.id}
-        </text>
+        <g key={`lbl-${signal.id}`} style={{ pointerEvents: 'none' }}>
+          <rect
+            x={signal.x + 15}
+            y={signal.y - 8}
+            width={signal.id.length * 6.5 + 6}
+            height={16}
+            fill="white"
+            stroke="#cbd5e1"
+            strokeWidth={1}
+            rx={3}
+            opacity={0.92}
+          />
+          <text
+            x={signal.x + 18}
+            y={signal.y + 4}
+            fill="#0f172a"
+            fontSize={9}
+            fontFamily="monospace"
+            fontWeight="600"
+          >
+            {signal.id}
+          </text>
+        </g>
       ))}
 
       {/* Legend */}
-      <g transform="translate(38, 618)">
-        <rect x={0} y={0} width={230} height={34} fill="#0f172a" stroke="#334155" strokeWidth={1} rx={3} opacity={0.9} />
+      <g transform="translate(38, 620)">
+        <rect x={0} y={0} width={248} height={36} fill="white" stroke="#cbd5e1" strokeWidth={1} rx={4} opacity={0.95} />
         {[
           { color: '#ef4444', label: 'escalate',   dashed: false },
           { color: '#f59e0b', label: 'follow-up',  dashed: false },
-          { color: '#6b7280', label: 'noise',       dashed: false },
+          { color: '#64748b', label: 'noise',       dashed: false },
           { color: '#3b82f6', label: 'drone route', dashed: true  },
         ].map((item, i) => (
-          <g key={item.label} transform={`translate(${8 + i * 57}, 17)`}>
+          <g key={item.label} transform={`translate(${10 + i * 60}, 18)`}>
             {item.dashed
-              ? <line x1={0} y1={0} x2={10} y2={0} stroke={item.color} strokeWidth={1.5} strokeDasharray="3,2" />
-              : <circle cx={5} cy={0} r={4} fill={item.color} />
+              ? <line x1={0} y1={0} x2={12} y2={0} stroke={item.color} strokeWidth={2} strokeDasharray="3,2" />
+              : <circle cx={5} cy={0} r={5} fill={item.color} stroke="white" strokeWidth={1} />
             }
-            <text x={item.dashed ? 13 : 12} y={4} fill="#94a3b8" fontSize={8} fontFamily="monospace">{item.label}</text>
+            <text x={item.dashed ? 15 : 13} y={4} fill="#475569" fontSize={8.5} fontFamily="monospace">{item.label}</text>
           </g>
         ))}
       </g>
