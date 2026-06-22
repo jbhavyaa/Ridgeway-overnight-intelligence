@@ -6,10 +6,27 @@ import { signals } from '@/lib/seed/signals'
 import SiteMap from '@/components/SiteMap'
 import ReviewQueue from '@/components/ReviewQueue'
 
+const CACHE_KEY = 'ridgeway_threads_v1'
+
 function mergeThread(prev: Thread[], thread: Thread): Thread[] {
   const exists = prev.find(t => t.id === thread.id)
   if (exists) return prev.map(t => t.id === thread.id ? thread : t)
   return [...prev, thread]
+}
+
+function loadCached(): Thread[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Thread[]) : null
+  } catch { return null }
+}
+
+function saveCache(threads: Thread[]) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(threads)) } catch { /* ignore */ }
+}
+
+function clearCache() {
+  try { localStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
 }
 
 export default function Home() {
@@ -24,7 +41,13 @@ export default function Home() {
   useEffect(() => {
     if (hasStarted.current) return
     hasStarted.current = true
-    startInvestigation()
+    const cached = loadCached()
+    if (cached && cached.length > 0) {
+      setThreads(cached)
+      setStatus('complete')
+    } else {
+      startInvestigation()
+    }
   }, [])
 
   useEffect(() => {
@@ -43,6 +66,7 @@ export default function Home() {
         setThreads(prev => mergeThread(prev, data.thread))
       } else if (data.type === 'done') {
         setThreads(data.threads)
+        saveCache(data.threads)
         setStatus('complete')
         es.close()
       } else if (data.type === 'running') {
@@ -59,6 +83,7 @@ export default function Home() {
   }
 
   const resetAndReinvestigate = async () => {
+    clearCache()
     await fetch('/api/investigate', { method: 'DELETE' })
     hasStarted.current = false
     setStatus('idle'); setThreads([]); setLog([]); setSelectedThreadId(null); setNewDroneRoute(null)
