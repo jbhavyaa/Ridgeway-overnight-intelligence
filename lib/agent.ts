@@ -115,7 +115,8 @@ async function runInvestigation(
       model: 'llama-3.3-70b-versatile',
       messages,
       tools: allTools,
-      tool_choice: 'auto'
+      tool_choice: 'auto',
+      temperature: 0
     })
 
     const message = response.choices[0].message
@@ -160,15 +161,13 @@ async function runInvestigation(
     if (finding) break
   }
 
-  if (!finding) {
-    finding = {
-      hypothesis: 'Unable to reach a conclusion — investigation loop exhausted.',
-      confidence: 'low',
-      severity: 'watch',
-      recommendation: 'Manual review required.',
-      unknowns: ['Investigation loop exhausted without conclusion — manual review needed'],
-      reasoning: 'Max turns reached without submit_findings call'
-    }
+  finding ??= {
+    hypothesis: 'Unable to reach a conclusion — investigation loop exhausted.',
+    confidence: 'low',
+    severity: 'watch',
+    recommendation: 'Manual review required.',
+    unknowns: ['Investigation loop exhausted without conclusion — manual review needed'],
+    reasoning: 'Max turns reached without submit_findings call'
   }
 
   return {

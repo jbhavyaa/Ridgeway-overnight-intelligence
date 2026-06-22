@@ -6,6 +6,7 @@ import { store } from '@/lib/store'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function GET(_req: NextRequest) {
   if (store.getStatus() === 'complete') {
@@ -48,6 +49,8 @@ export async function GET(_req: NextRequest) {
           } catch (clusterErr) {
             send({ type: 'log', message: `Cluster ${i + 1} failed: ${String(clusterErr)} — skipping` })
           }
+
+
         }
 
         store.setStatus('complete')
