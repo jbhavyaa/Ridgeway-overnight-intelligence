@@ -39,6 +39,10 @@ const submitFindingsTool: Groq.Chat.ChatCompletionTool = {
   }
 }
 
+function isDailyLimitError(err: unknown): boolean {
+  return String(err).includes('tokens per day') || String(err).includes('TPD')
+}
+
 async function callGroq(
   params: ChatCompletionCreateParamsNonStreaming
 ): Promise<Groq.Chat.ChatCompletion> {
@@ -49,6 +53,8 @@ async function callGroq(
       return await groq.chat.completions.create(params)
     } catch (err) {
       lastErr = err
+      // Daily quota exhausted — retrying won't help, fail immediately
+      if (isDailyLimitError(err)) throw err
       if (attempt < MAX_RETRIES - 1) {
         await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
       }
