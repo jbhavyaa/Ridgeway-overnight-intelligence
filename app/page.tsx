@@ -45,6 +45,10 @@ export default function Home() {
         setThreads(data.threads)
         setStatus('complete')
         es.close()
+      } else if (data.type === 'running') {
+        setThreads(data.threads)
+        setStatus('running')
+        es.close()
       } else if (data.type === 'error') {
         setLog(prev => [...prev, 'ERROR: ' + String(data.message)])
         setStatus('idle')

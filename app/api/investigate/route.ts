@@ -8,13 +8,23 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+function sseOnce(data: object): Response {
+  return new Response(`data: ${JSON.stringify(data)}\n\n`, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  })
+}
+
 export async function GET(_req: NextRequest) {
   if (store.getStatus() === 'complete') {
-    return Response.json({ threads: store.getThreads(), status: 'complete' })
+    return sseOnce({ type: 'done', threads: store.getThreads() })
   }
 
   if (store.getStatus() === 'running') {
-    return Response.json({ threads: store.getThreads(), status: 'running' })
+    return sseOnce({ type: 'running', threads: store.getThreads() })
   }
 
   const encoder = new TextEncoder()
