@@ -2,6 +2,7 @@
 
 import { Signal, Thread } from '@/lib/types'
 import { zones } from '@/lib/seed/zones'
+import { useEffect, useState } from 'react'
 
 interface SiteMapProps {
   readonly signals: Signal[]
@@ -42,14 +43,107 @@ function getSignalColor(signal: Signal, threads: Thread[], selectedThreadId: str
   }
 }
 
+function routeToPath(route: Array<{ x: number; y: number }>): string {
+  return route.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+}
+
+interface DroneProps {
+  readonly route: Array<{ x: number; y: number; t: string; zone: string }>
+  readonly animKey: number
+}
+
+function DroneAnimation({ route, animKey }: DroneProps) {
+  const pathD = routeToPath(route)
+  const pathId = `drone-path-${animKey}`
+
+  return (
+    <g>
+      {/* Hidden motion path */}
+      <path id={pathId} d={pathD} fill="none" stroke="none" />
+
+      {/* Route trail draws in as drone flies */}
+      <path
+        d={pathD}
+        fill="none"
+        stroke="#0284c7"
+        strokeWidth={2.5}
+        strokeDasharray="6,3"
+        opacity={0.85}
+      >
+        <animate attributeName="opacity" from="0" to="0.85" dur="0.3s" fill="freeze" />
+      </path>
+
+      {/* Drone group — follows the path */}
+      <g>
+        <animateMotion dur="4s" repeatCount="1" fill="freeze" rotate="auto">
+          <mpath href={`#${pathId}`} />
+        </animateMotion>
+
+        {/* Glow halo */}
+        <circle cx="0" cy="0" r="22" fill="#3b82f6" opacity="0.15">
+          <animate attributeName="r" values="18;26;18" dur="1s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.15;0.05;0.15" dur="1s" repeatCount="indefinite" />
+        </circle>
+
+        {/* Arms */}
+        <line x1="-7" y1="-7" x2="-14" y2="-14" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="7" y1="-7" x2="14" y2="-14" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="-7" y1="7" x2="-14" y2="14" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="7" y1="7" x2="14" y2="14" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
+
+        {/* Propeller hubs */}
+        {[[-14, -14], [14, -14], [-14, 14], [14, 14]].map(([px, py]) => (
+          <g key={`prop-${px}-${py}`} transform={`translate(${px},${py})`}>
+            {/* Spinning blade ring */}
+            <ellipse cx="0" cy="0" rx="6" ry="2.5" fill="#60a5fa" opacity="0.7">
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0"
+                to="360"
+                dur="0.15s"
+                repeatCount="indefinite"
+              />
+            </ellipse>
+            {/* Hub dot */}
+            <circle cx="0" cy="0" r="2" fill="#1d4ed8" />
+          </g>
+        ))}
+
+        {/* Body */}
+        <rect x="-7" y="-7" width="14" height="14" rx="3" fill="#2563eb" stroke="white" strokeWidth="1.5" />
+
+        {/* Camera dot */}
+        <circle cx="0" cy="0" r="2.5" fill="#93c5fd" />
+
+        {/* Status blink */}
+        <circle cx="0" cy="-10" r="2" fill="#22c55e">
+          <animate attributeName="opacity" values="1;0;1" dur="0.6s" repeatCount="indefinite" />
+        </circle>
+      </g>
+    </g>
+  )
+}
+
 export default function SiteMap({ signals, threads, selectedThreadId, onSelectSignal, newDroneRoute }: SiteMapProps) {
   const selectedThread = threads.find(t => t.id === selectedThreadId)
   const selectedSignalIds = new Set(selectedThread?.signalIds ?? [])
 
-  const droneWaypoints = [
+  const [droneAnimKey, setDroneAnimKey] = useState(0)
+  const [showDrone, setShowDrone] = useState(false)
+
+  useEffect(() => {
+    if (!newDroneRoute || newDroneRoute.length < 2) return
+    setDroneAnimKey(k => k + 1)
+    setShowDrone(true)
+    const timer = setTimeout(() => setShowDrone(false), 7000)
+    return () => clearTimeout(timer)
+  }, [newDroneRoute])
+
+  const defaultWaypoints = [
     { x: 500, y: 640 }, { x: 460, y: 310 }, { x: 655, y: 515 }, { x: 765, y: 435 }, { x: 500, y: 650 },
   ]
-  const dronePolyline = droneWaypoints.map(p => `${p.x},${p.y}`).join(' ')
+  const dronePolyline = defaultWaypoints.map(p => `${p.x},${p.y}`).join(' ')
 
   return (
     <svg viewBox="0 0 1000 700" className="w-full h-full" style={{ background: '#f1f5f9' }}>
@@ -99,7 +193,7 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
         )
       })}
 
-      {/* NP-118 patrol polyline */}
+      {/* NP-118 default patrol polyline */}
       <polyline
         points={dronePolyline}
         fill="none"
@@ -109,8 +203,13 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
         opacity={0.4}
       />
 
-      {/* Dispatched drone route */}
-      {newDroneRoute && newDroneRoute.length > 1 && (
+      {/* Drone animation on dispatch */}
+      {showDrone && newDroneRoute && newDroneRoute.length > 1 && (
+        <DroneAnimation key={droneAnimKey} route={newDroneRoute} animKey={droneAnimKey} />
+      )}
+
+      {/* Static dispatched route (shown after animation) */}
+      {!showDrone && newDroneRoute && newDroneRoute.length > 1 && (
         <polyline
           points={newDroneRoute.map(p => `${p.x},${p.y}`).join(' ')}
           fill="none"
@@ -128,9 +227,7 @@ export default function SiteMap({ signals, threads, selectedThreadId, onSelectSi
         const r = isSelected ? 13 : 9
         return (
           <g key={signal.id} onClick={() => onSelectSignal(signal.id)} style={{ cursor: 'pointer' }}>
-            {/* Shadow ring */}
             <circle cx={signal.x} cy={signal.y} r={r + 5} fill={color} opacity={isSelected ? 0.2 : 0.1} />
-            {/* Pin body */}
             <circle
               cx={signal.x}
               cy={signal.y}

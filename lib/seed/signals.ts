@@ -11,9 +11,11 @@ export const signalsJun19: Signal[] = [
   { id: "SIG-07", type: "badge_failure",     ts: "2026-06-20T02:18:31", zone: "ap-2",    x: 710, y: 480, source: "badge_reader",     payload: { badge_id: "C-4471", result: "denied" } },
   { id: "SIG-08", type: "badge_failure",     ts: "2026-06-20T02:19:02", zone: "ap-2",    x: 710, y: 480, source: "badge_reader",     payload: { badge_id: "C-4471", result: "denied" } },
   { id: "SIG-09", type: "drone_patrol",      ts: "2026-06-20T02:30:00", zone: "multi",   x: 500, y: 650, source: "drone",            payload: { patrol_id: "NP-118", start: "02:30:00", end: "03:05:00", waypoints: [{ zone:"drone-pad",x:500,y:640,t:"02:31" },{ zone:"block-b",x:460,y:310,t:"02:38" },{ zone:"block-c",x:655,y:515,t:"02:45" },{ zone:"yard-b",x:765,y:435,t:"02:48" },{ zone:"drone-pad",x:500,y:650,t:"03:04" }] } },
-  { id: "SIG-10", type: "motion",            ts: "2026-06-20T02:33:09", zone: "yard-a",  x: 310, y: 400, source: "camera",           payload: { confidence: 0.71 } },
-  { id: "SIG-11", type: "motion",            ts: "2026-06-20T02:41:22", zone: "yard-a",  x: 290, y: 425, source: "camera",           payload: { confidence: 0.64 } },
-  { id: "SIG-12", type: "badge_failure",     ts: "2026-06-20T04:51:17", zone: "gate-1",  x: 120, y: 600, source: "badge_reader",     payload: { badge_id: "D-2290", result: "denied", note: "retry" } },
+  { id: "SIG-10", type: "motion",            ts: "2026-06-20T02:33:09", zone: "yard-a",     x: 310, y: 400, source: "camera",       payload: { confidence: 0.71 } },
+  { id: "SIG-11", type: "motion",            ts: "2026-06-20T02:41:22", zone: "yard-a",     x: 290, y: 425, source: "camera",       payload: { confidence: 0.64 } },
+  { id: "SIG-12", type: "motion",            ts: "2026-06-20T03:22:15", zone: "loading-bay",x: 830, y: 615, source: "camera",       payload: { confidence: 0.77, note: "movement near service door" } },
+  { id: "SIG-13", type: "motion",            ts: "2026-06-20T03:26:41", zone: "loading-bay",x: 845, y: 600, source: "camera",       payload: { confidence: 0.71 } },
+  { id: "SIG-14", type: "badge_failure",     ts: "2026-06-20T04:51:17", zone: "gate-1",     x: 120, y: 600, source: "badge_reader", payload: { badge_id: "D-2290", result: "denied", note: "retry" } },
 ]
 
 // Night of Sat 21 Jun — quiet night, all signals resolve to noise

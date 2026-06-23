@@ -38,15 +38,31 @@ function expandCluster(seed: Signal, signals: Signal[], visited: Set<string>): S
   return cluster
 }
 
+function findDroneHost(drone: Signal, clusters: Signal[][]): Signal[] | null {
+  const droneTime = new Date(drone.ts).getTime()
+  let bestCluster: Signal[] | null = null
+  let bestDiff = Infinity
+  for (const cluster of clusters) {
+    const latestTs = Math.max(...cluster.map(s => new Date(s.ts).getTime()))
+    const diff = droneTime - latestTs
+    if (diff >= 0 && diff <= 60 * 60 * 1000 && diff < bestDiff) {
+      bestDiff = diff
+      bestCluster = cluster
+    }
+  }
+  return bestCluster
+}
+
 export function clusterSignals(signals: Signal[]): Signal[][] {
   const visited = new Set<string>()
   const clusters: Signal[][] = []
 
   for (const seed of signals) {
     if (visited.has(seed.id)) continue
+    visited.add(seed.id)
     if (seed.type === 'drone_patrol') {
-      visited.add(seed.id)
-      clusters.push([seed])
+      const host = findDroneHost(seed, clusters)
+      if (host) { host.push(seed) } else { clusters.push([seed]) }
       continue
     }
     clusters.push(expandCluster(seed, signals, visited))

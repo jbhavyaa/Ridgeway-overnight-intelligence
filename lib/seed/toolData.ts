@@ -113,6 +113,11 @@ export function getZoneHistory(zone: string, lookbackDays: number) {
       zone, lookbackDays,
       summary: "Early badge attempts before grace window (05:00) occur roughly once per month. All prior incidents resolved on grace re-scan within 15 minutes.",
       baseline: "early_arrival_denials: OCCASIONAL (benign pattern)"
+    },
+    "loading-bay": {
+      zone, lookbackDays,
+      summary: "Loading bay sees authorized delivery vehicle staging during 06:00–20:00 only. Two unexplained overnight motion events in past 90 days — both closed as inconclusive, no forced entry confirmed, no follow-up badge activity recorded. No scheduled deliveries overnight. No authorized personnel assigned to this zone between 22:00–06:00.",
+      baseline: "overnight_motion: RARE BUT OCCURRED — no confirmed cause in prior incidents"
     }
   }
   return histories[zone] || { zone, lookbackDays, summary: "No history available for this zone.", baseline: "unknown" }
