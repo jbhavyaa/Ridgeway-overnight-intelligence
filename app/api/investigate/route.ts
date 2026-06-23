@@ -46,10 +46,9 @@ export async function GET(req: NextRequest) {
 
         const clusters = clusterSignals(signals)
 
-        for (const cluster of clusters) {
+        await Promise.all(clusters.map(async (cluster) => {
           const sigIds = cluster.map(s => s.id).join(', ')
           send({ type: 'log', message: `── Investigating ${sigIds} ──` })
-
           try {
             const thread = await investigateCluster(cluster, (msg) => {
               send({ type: 'log', message: msg })
@@ -60,7 +59,7 @@ export async function GET(req: NextRequest) {
           } catch (clusterErr) {
             send({ type: 'log', message: `ERROR: cluster failed — ${String(clusterErr)}` })
           }
-        }
+        }))
 
         store.setStatus('complete')
         send({ type: 'done', threads: store.getThreads() })
