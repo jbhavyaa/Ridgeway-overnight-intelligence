@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { signals } from '@/lib/seed/signals'
+import { NIGHTS, signalsJun19 } from '@/lib/seed/signals'
 import { clusterSignals } from '@/lib/cluster'
 import { investigateCluster } from '@/lib/agent'
 import { store } from '@/lib/store'
@@ -18,7 +18,11 @@ function sseOnce(data: object): Response {
   })
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const day = req.nextUrl.searchParams.get('day') ?? '2026-06-19'
+  const night = NIGHTS[day] ?? NIGHTS['2026-06-19']
+  const signals = night?.signals ?? signalsJun19
+
   if (store.getStatus() === 'complete') {
     return sseOnce({ type: 'done', threads: store.getThreads() })
   }
@@ -59,8 +63,6 @@ export async function GET(_req: NextRequest) {
           } catch (clusterErr) {
             send({ type: 'log', message: `Cluster ${i + 1} failed: ${String(clusterErr)} — skipping` })
           }
-
-
         }
 
         store.setStatus('complete')
