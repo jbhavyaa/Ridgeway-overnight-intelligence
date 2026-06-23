@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Thread } from '@/lib/types'
+import { NIGHTS } from '@/lib/seed/signals'
 
 interface BriefingSections {
   what_happened: string
@@ -25,8 +26,12 @@ export default function BriefingPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('ridgeway_threads_v1')
-      if (raw) setThreads(JSON.parse(raw) as Thread[])
+      const all: Thread[] = []
+      for (const day of Object.keys(NIGHTS)) {
+        const raw = localStorage.getItem(`ridgeway_threads_${day}`)
+        if (raw) all.push(...(JSON.parse(raw) as Thread[]))
+      }
+      if (all.length > 0) setThreads(all)
     } catch { /* ignore */ }
   }, [])
 

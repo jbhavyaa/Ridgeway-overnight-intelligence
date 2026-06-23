@@ -8,21 +8,36 @@ import ReviewQueue from '@/components/ReviewQueue'
 
 const DEFAULT_DAY = '2026-06-19'
 
-function cacheKey(day: string) { return `ridgeway_threads_${day}` }
+function threadsKey(day: string) { return `ridgeway_threads_${day}` }
+function logKey(day: string) { return `ridgeway_log_${day}` }
 
 function loadCached(day: string): Thread[] | null {
   try {
-    const raw = localStorage.getItem(cacheKey(day))
+    const raw = localStorage.getItem(threadsKey(day))
     return raw ? (JSON.parse(raw) as Thread[]) : null
   } catch { return null }
 }
 
+function loadCachedLog(day: string): string[] {
+  try {
+    const raw = localStorage.getItem(logKey(day))
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch { return [] }
+}
+
 function saveCache(day: string, threads: Thread[]) {
-  try { localStorage.setItem(cacheKey(day), JSON.stringify(threads)) } catch { /* ignore */ }
+  try { localStorage.setItem(threadsKey(day), JSON.stringify(threads)) } catch { /* ignore */ }
+}
+
+function saveLog(day: string, lines: string[]) {
+  try { localStorage.setItem(logKey(day), JSON.stringify(lines)) } catch { /* ignore */ }
 }
 
 function clearCache(day: string) {
-  try { localStorage.removeItem(cacheKey(day)) } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(threadsKey(day))
+    localStorage.removeItem(logKey(day))
+  } catch { /* ignore */ }
 }
 
 function mergeThread(prev: Thread[], thread: Thread): Thread[] {
@@ -59,6 +74,7 @@ export default function Home() {
     const cached = loadCached(selectedDay)
     if (cached && cached.length > 0) {
       setThreads(cached)
+      setLog(loadCachedLog(selectedDay))
       setStatus('complete')
     } else {
       startInvestigation()
@@ -82,6 +98,7 @@ export default function Home() {
       } else if (data.type === 'done') {
         setThreads(data.threads)
         saveCache(selectedDay, data.threads)
+        setLog(prev => { saveLog(selectedDay, prev); return prev })
         setStatus('complete')
         es.close()
       } else if (data.type === 'running') {
@@ -158,8 +175,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           {status === 'running' && (
             <span className="text-xs text-amber-600 flex items-center gap-1.5 font-medium">
-              <span className="inline-block w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-              Investigating…
+              <span className="inline-block w-2 h-2 bg-amber-500 rounded-full animate-pulse" />{'Investigating…'}
             </span>
           )}
           {status === 'complete' && (
@@ -205,9 +221,10 @@ export default function Home() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden p-4 gap-4">
-        {/* Left: Map panel */}
-        <div className="flex flex-col shrink-0" style={{ width: '52%' }}>
-          <div className="flex-1 rounded-xl border border-slate-200 overflow-hidden flex flex-col bg-white shadow-sm">
+        {/* Left: Map + AI log */}
+        <div className="flex flex-col shrink-0 gap-3" style={{ width: '52%' }}>
+          {/* Map — takes ~58% of left column */}
+          <div className="rounded-xl border border-slate-200 overflow-hidden flex flex-col bg-white shadow-sm" style={{ flex: '0 0 58%' }}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 shrink-0">
               <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Site Map</span>
               <span className="text-xs text-slate-400">{selectedDay === '2026-06-21' ? 'NP-121 patrol route shown' : 'NP-118 patrol route shown'}</span>
@@ -226,16 +243,38 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Live log */}
-          {status === 'running' && log.length > 0 && (
-            <div ref={logRef} className="mt-3 rounded-xl border border-slate-200 bg-white p-3 h-28 overflow-y-auto shrink-0 shadow-sm">
-              <p className="text-xs text-sky-600 font-mono font-semibold mb-1">Investigation log</p>
-              {log.map((line, i) => (
-                <p key={`log-${i}-${line.slice(0, 20)}`} className="text-xs font-mono text-slate-400">{line}</p>
-              ))}
-              <p className="text-xs font-mono text-amber-500 animate-pulse">▌</p>
+          {/* AI Investigation Log — always visible, takes remaining space */}
+          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col bg-slate-950 shadow-sm border border-slate-800">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">AI Investigation Log</span>
+                {status === 'running' && (
+                  <span className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />{'live'}
+                  </span>
+                )}
+                {status === 'complete' && log.length > 0 && (
+                  <span className="text-[10px] text-green-500 font-medium">done</span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-600">{log.length} lines</span>
             </div>
-          )}
+
+            <div ref={logRef} className="flex-1 overflow-y-auto p-3 space-y-0.5">
+              {log.length === 0 ? (
+                <p className="text-xs font-mono text-slate-600 italic">
+                  {status === 'complete' ? 'No log saved for this session — re-investigate to capture reasoning.' : 'Start investigation to see AI reasoning…'}
+                </p>
+              ) : (
+                log.map((line, i) => (
+                  <LogLine key={`${i}-${line.slice(0, 15)}`} line={line} />
+                ))
+              )}
+              {status === 'running' && (
+                <span className="text-xs font-mono text-amber-400 animate-pulse">▌</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right: Review queue */}
@@ -266,4 +305,38 @@ export default function Home() {
       </div>
     </div>
   )
+}
+
+function LogLine({ line }: { readonly line: string }) {
+  // Section divider
+  if (line.startsWith('──')) {
+    return <p className="text-xs font-mono leading-5 text-slate-600 pt-2">{line}</p>
+  }
+  // AI reasoning text
+  if (line.startsWith('◈ ')) {
+    return <p className="text-xs font-mono leading-5 text-slate-200 whitespace-pre-wrap">{line.slice(2)}</p>
+  }
+  // Tool call
+  if (line.startsWith('→ ')) {
+    return (
+      <p className="text-xs font-mono leading-5">
+        <span className="text-sky-500">→ </span>
+        <span className="text-sky-300">{line.slice(2)}</span>
+      </p>
+    )
+  }
+  // Verdict lines
+  if (line.startsWith('🚨')) {
+    return <p className="text-xs font-mono leading-5 text-red-400 font-bold pt-1">{line}</p>
+  }
+  if (line.startsWith('⚠️')) {
+    return <p className="text-xs font-mono leading-5 text-amber-400 font-bold pt-1">{line}</p>
+  }
+  if (line.startsWith('✓')) {
+    return <p className="text-xs font-mono leading-5 text-green-400 font-bold pt-1">{line}</p>
+  }
+  if (line.startsWith('ERROR')) {
+    return <p className="text-xs font-mono leading-5 text-red-500 font-bold">{line}</p>
+  }
+  return <p className="text-xs font-mono leading-5 text-slate-500">{line}</p>
 }

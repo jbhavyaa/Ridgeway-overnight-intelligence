@@ -45,12 +45,10 @@ export async function GET(req: NextRequest) {
         store.clearLog()
 
         const clusters = clusterSignals(signals)
-        send({ type: 'log', message: `Grouped ${signals.length} signals into ${clusters.length} clusters` })
 
-        for (let i = 0; i < clusters.length; i++) {
-          const cluster = clusters[i]
+        for (const cluster of clusters) {
           const sigIds = cluster.map(s => s.id).join(', ')
-          send({ type: 'log', message: `Cluster ${i + 1} (${sigIds}) — starting investigation...` })
+          send({ type: 'log', message: `── Investigating ${sigIds} ──` })
 
           try {
             const thread = await investigateCluster(cluster, (msg) => {
@@ -59,9 +57,8 @@ export async function GET(req: NextRequest) {
             })
             store.setThreads([...store.getThreads(), thread])
             send({ type: 'thread', thread })
-            send({ type: 'log', message: `Cluster ${i + 1} → ${thread.severity} (${thread.confidence} confidence)` })
           } catch (clusterErr) {
-            send({ type: 'log', message: `Cluster ${i + 1} failed: ${String(clusterErr)} — skipping` })
+            send({ type: 'log', message: `ERROR: cluster failed — ${String(clusterErr)}` })
           }
         }
 

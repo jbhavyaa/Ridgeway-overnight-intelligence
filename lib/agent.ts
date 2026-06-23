@@ -4,19 +4,33 @@ import { Signal, Thread, EvidenceItem } from './types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const SYSTEM_PROMPT = `You are a security intelligence agent investigating overnight signals at an industrial site before the operator arrives each morning.
+const SYSTEM_PROMPT = `You are a security intelligence agent investigating overnight signals at an industrial site before the morning operator arrives.
 
-For each cluster of signals, reason about what happened. Use tools to check context before concluding. Your job is to investigate, not just summarize.
+Investigate each cluster by reasoning step-by-step in plain English, then calling tools to verify. Think out loud — explain WHY you are calling each tool before calling it, and what the result means for your theory.
 
-Rules:
-- You MUST call at least one context tool (get_weather, get_shift_roster, get_access_records, get_zone_history, or check_drone_coverage) before calling submit_findings on any multi-signal cluster.
-- You MUST populate the unknowns array with at least one item. For noise threads, list what visual confirmation would have made you more certain. For escalate threads, list what the drone did NOT observe.
-- Fence alerts near the east perimeter (gate-3) REQUIRE a weather check — east wind explains false positives.
-- Badge failures REQUIRE a roster check AND access records check.
-- Unexplained vehicle movements REQUIRE roster + access records.
-- Yard-a motion at 02:30+ may be cleaning crew — check the roster.
-- Be willing to be wrong. State theories, not conclusions. Uncertainty is accuracy.
-- When you have gathered sufficient evidence, call submit_findings.`
+HARD RULES (non-negotiable):
+- Fence alerts at gate-3 (east perimeter): MUST call get_weather first. East wind above 40 kph is the definitive noise explanation.
+- Badge failures anywhere: MUST call get_shift_roster AND get_access_records. Check if the badge holder was legitimately on site.
+- Unexplained vehicle movements: MUST call get_shift_roster AND get_access_records. No scheduled vehicle = anomaly.
+- Motion in yard-a between 02:00–04:00: MUST call get_shift_roster. SiteClean crew is routinely authorized there.
+- Always call get_zone_history to establish whether activity is normal for that zone.
+- NEVER skip tools. NEVER submit_findings without consulting at least one context tool per cluster.
+
+SEVERITY CRITERIA (apply consistently):
+- noise: Activity is fully explained by weather, roster, or known baseline. Nothing anomalous.
+- watch: Activity is partially explained but has unverified elements worth monitoring. No immediate threat.
+- escalate: Activity cannot be explained and represents a potential security breach. Immediate action required.
+
+UNKNOWNS: Always list at least one thing you could not verify — even for noise findings.`
+
+const TOOL_DESCRIPTIONS: Record<string, string> = {
+  get_weather: 'Checking weather conditions',
+  get_shift_roster: 'Checking shift roster',
+  get_access_records: 'Pulling access records',
+  get_zone_history: 'Looking up zone baseline',
+  check_drone_coverage: 'Reviewing drone coverage',
+  dispatch_drone_mission: 'Dispatching drone',
+}
 
 const submitFindingsTool: Anthropic.Tool = {
   name: 'submit_findings',
@@ -35,6 +49,15 @@ const submitFindingsTool: Anthropic.Tool = {
   }
 }
 
+type Finding = {
+  hypothesis: string
+  confidence: 'low' | 'medium' | 'high'
+  severity: 'noise' | 'watch' | 'escalate'
+  recommendation: string
+  unknowns: string[]
+  reasoning: string
+}
+
 function isOverloaded(err: unknown): boolean {
   const msg = String(err)
   return msg.includes('overloaded_error') || msg.includes('529')
@@ -51,6 +74,7 @@ async function callClaude(
       return await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
+        temperature: 0,
         system: SYSTEM_PROMPT,
         messages,
         tools,
@@ -65,6 +89,49 @@ async function callClaude(
     }
   }
   throw lastErr
+}
+
+function emitReasoning(text: string, onLog: (msg: string) => void) {
+  const paragraphs = text.trim().split(/\n\n+/)
+  for (const para of paragraphs) {
+    const clean = para.trim().replaceAll('\n', ' ')
+    if (clean) onLog(`◈ ${clean}`)
+  }
+}
+
+function toolContext(args: Record<string, unknown>): string {
+  const val = args.zone ?? args.accessPoint ?? args.date ?? args.windowStart
+  if (val == null) return ''
+  return typeof val === 'string' ? val : JSON.stringify(val)
+}
+
+function verdictLine(finding: Finding): string {
+  if (finding.severity === 'escalate') return `🚨 VERDICT: ESCALATE — ${finding.hypothesis}`
+  if (finding.severity === 'watch') return `⚠️ VERDICT: WATCH — ${finding.hypothesis}`
+  return `✓ VERDICT: NOISE — ${finding.hypothesis}`
+}
+
+async function executeToolBlock(
+  toolBlock: Anthropic.ToolUseBlock,
+  evidence: EvidenceItem[],
+  onLog: (msg: string) => void
+): Promise<Anthropic.ToolResultBlockParam> {
+  const { id, name, input } = toolBlock
+  const args = input as Record<string, unknown>
+  const label = TOOL_DESCRIPTIONS[name] ?? name
+  const ctx = toolContext(args)
+  const suffix = ctx ? ` — ${ctx}` : ''
+  onLog(`→ ${label}${suffix}`)
+
+  let result: unknown
+  try {
+    result = await executeTool(name, args)
+  } catch (err) {
+    result = { error: String(err) }
+  }
+
+  evidence.push({ tool: name, input: args, result })
+  return { type: 'tool_result', tool_use_id: id, content: JSON.stringify(result) }
 }
 
 function fallbackThread(signals: Signal[], reason: string): Thread {
@@ -84,18 +151,53 @@ function fallbackThread(signals: Signal[], reason: string): Thread {
 
 export async function investigateCluster(
   signals: Signal[],
-  onToolCall?: (entry: string) => void
+  onLog?: (entry: string) => void
 ): Promise<Thread> {
   try {
-    return await runInvestigation(signals, onToolCall)
+    return await runInvestigation(signals, onLog ?? (() => undefined))
   } catch (err) {
     return fallbackThread(signals, String(err))
   }
 }
 
+type TurnResult = { finding: Finding; done: true } | { done: false }
+
+async function processTurn(
+  messages: Anthropic.MessageParam[],
+  allTools: Anthropic.Tool[],
+  evidence: EvidenceItem[],
+  onLog: (entry: string) => void
+): Promise<TurnResult> {
+  const response = await callClaude(messages, allTools)
+  messages.push({ role: 'assistant', content: response.content })
+
+  for (const block of response.content) {
+    if (block.type === 'text' && block.text.trim()) emitReasoning(block.text, onLog)
+  }
+
+  const toolUseBlocks = response.content.filter(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+  )
+  if (toolUseBlocks.length === 0) return { done: false }
+
+  const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+  for (const toolBlock of toolUseBlocks) {
+    if (toolBlock.name === 'submit_findings') {
+      toolResults.push({ type: 'tool_result', tool_use_id: toolBlock.id, content: 'Findings submitted successfully.' })
+      messages.push({ role: 'user', content: toolResults })
+      return { finding: toolBlock.input as Finding, done: true }
+    }
+    toolResults.push(await executeToolBlock(toolBlock, evidence, onLog))
+  }
+
+  messages.push({ role: 'user', content: toolResults })
+  return { done: false }
+}
+
 async function runInvestigation(
   signals: Signal[],
-  onToolCall?: (entry: string) => void
+  onLog: (entry: string) => void
 ): Promise<Thread> {
   const signalSummary = signals.map(s =>
     `- ${s.id} [${s.type}] at ${s.zone} (${s.ts}): ${JSON.stringify(s.payload)}`
@@ -104,70 +206,17 @@ async function runInvestigation(
   const messages: Anthropic.MessageParam[] = [
     {
       role: 'user',
-      content: `Investigate this cluster of ${signals.length} signal(s):\n\n${signalSummary}\n\nUse the available tools to gather context, then call submit_findings with your conclusion.`
+      content: `Investigate this cluster of ${signals.length} signal(s):\n\n${signalSummary}\n\nThink through what might have happened, then use tools to verify. When you have enough evidence, call submit_findings.`
     }
   ]
 
   const evidence: EvidenceItem[] = []
   const allTools = [...toolDefinitions, submitFindingsTool]
-  let finding: {
-    hypothesis: string
-    confidence: 'low' | 'medium' | 'high'
-    severity: 'noise' | 'watch' | 'escalate'
-    recommendation: string
-    unknowns: string[]
-    reasoning: string
-  } | null = null
+  let finding: Finding | null = null
 
   for (let turn = 0; turn < 5; turn++) {
-    const response = await callClaude(messages, allTools)
-
-    // Push the assistant message
-    messages.push({ role: 'assistant', content: response.content })
-
-    // Extract tool use blocks
-    const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-    )
-
-    if (toolUseBlocks.length === 0) break
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = []
-
-    for (const toolBlock of toolUseBlocks) {
-      const { id, name, input } = toolBlock
-      const args = input as Record<string, unknown>
-
-      if (name === 'submit_findings') {
-        finding = args as unknown as typeof finding
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: id,
-          content: 'Findings submitted successfully.'
-        })
-        break
-      }
-
-      onToolCall?.(`  → calling ${name}(${JSON.stringify(args)})`)
-
-      let result: unknown
-      try {
-        result = await executeTool(name, args)
-      } catch (err) {
-        result = { error: String(err) }
-      }
-
-      evidence.push({ tool: name, input: args, result })
-
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: id,
-        content: JSON.stringify(result)
-      })
-    }
-
-    messages.push({ role: 'user', content: toolResults })
-    if (finding) break
+    const result = await processTurn(messages, allTools, evidence, onLog)
+    if (result.done) { finding = result.finding; break }
   }
 
   finding ??= {
@@ -178,6 +227,8 @@ async function runInvestigation(
     unknowns: ['Investigation loop exhausted without conclusion — manual review needed'],
     reasoning: 'Max turns reached without submit_findings call'
   }
+
+  onLog(verdictLine(finding))
 
   return {
     id: `thread-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

@@ -118,7 +118,7 @@ export default function ThreadCard({
   const [expanded, setExpanded] = useState(false)
 
   const effectiveSeverity = thread.overriddenSeverity ?? thread.severity
-  const styles = SEVERITY_STYLES[effectiveSeverity]
+  const styles = SEVERITY_STYLES[effectiveSeverity] ?? SEVERITY_STYLES.noise
   const isNoise = effectiveSeverity === 'noise'
   const showDetail = !isNoise || expanded
   const canDispatch = (effectiveSeverity === 'escalate' || effectiveSeverity === 'watch') && thread.status !== 'dismissed'
