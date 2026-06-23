@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }).join('\n\n')
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-8',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     system: 'You are a security briefing writer. Use only the findings provided. Preserve all unknowns exactly as stated. Do not speculate beyond the evidence. You MUST respond with valid JSON only — no markdown, no prose outside the JSON object.',
     messages: [
@@ -54,10 +54,12 @@ ${findingsSummary}`,
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  // Strip markdown code fences if the model wrapped the JSON
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
   try {
-    const sections = JSON.parse(raw)
+    const sections = JSON.parse(cleaned)
     return Response.json({ sections })
   } catch {
-    return Response.json({ briefing: raw })
+    return Response.json({ briefing: cleaned })
   }
 }

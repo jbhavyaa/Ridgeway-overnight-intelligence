@@ -35,17 +35,22 @@ const submitFindingsTool: Anthropic.Tool = {
   }
 }
 
+function isOverloaded(err: unknown): boolean {
+  const msg = String(err)
+  return msg.includes('overloaded_error') || msg.includes('529')
+}
+
 async function callClaude(
   messages: Anthropic.MessageParam[],
   tools: Anthropic.Tool[]
 ): Promise<Anthropic.Message> {
-  const MAX_RETRIES = 3
+  const MAX_RETRIES = 5
   let lastErr: unknown
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await anthropic.messages.create({
-        model: 'claude-opus-4-8',
-        max_tokens: 4096,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
         system: SYSTEM_PROMPT,
         messages,
         tools,
@@ -54,7 +59,8 @@ async function callClaude(
     } catch (err) {
       lastErr = err
       if (attempt < MAX_RETRIES - 1) {
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
+        const delay = isOverloaded(err) ? 4000 * (attempt + 1) : 1000 * Math.pow(2, attempt)
+        await new Promise(r => setTimeout(r, delay))
       }
     }
   }
@@ -113,7 +119,7 @@ async function runInvestigation(
     reasoning: string
   } | null = null
 
-  for (let turn = 0; turn < 8; turn++) {
+  for (let turn = 0; turn < 5; turn++) {
     const response = await callClaude(messages, allTools)
 
     // Push the assistant message
