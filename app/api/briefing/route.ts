@@ -1,21 +1,17 @@
 import { NextRequest } from 'next/server'
-import { store } from '@/lib/store'
+import { Thread } from '@/lib/types'
 import Groq from 'groq-sdk'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 export async function POST(req: NextRequest) {
-  const { threadIds } = await req.json()
+  const { threads } = await req.json() as { threads: Thread[] }
 
-  const threads = threadIds
-    .map((id: string) => store.getThread(id))
-    .filter(Boolean)
-
-  if (threads.length === 0) {
+  if (!threads || threads.length === 0) {
     return Response.json({ error: 'No approved threads found' }, { status: 400 })
   }
 
-  const findingsSummary = threads.map((t: NonNullable<ReturnType<typeof store.getThread>>) => {
+  const findingsSummary = threads.map((t: Thread) => {
     const effectiveSeverity = t.overriddenSeverity || t.severity
     const droneLines = t.dispatchedMissions && t.dispatchedMissions.length > 0
       ? 'Drone dispatched: ' + t.dispatchedMissions.map(m => m.zone + ' — ' + m.observations.join(', ')).join('; ')

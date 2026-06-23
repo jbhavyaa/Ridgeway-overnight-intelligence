@@ -24,10 +24,10 @@ export default function BriefingPage() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    fetch('/api/threads')
-      .then(res => res.json())
-      .then(data => { if (data?.threads) setThreads(data.threads) })
-      .catch(() => {})
+    try {
+      const raw = localStorage.getItem('ridgeway_threads_v1')
+      if (raw) setThreads(JSON.parse(raw) as Thread[])
+    } catch { /* ignore */ }
   }, [])
 
   const approvedThreads = threads.filter(t => t.status === 'approved' || t.status === 'overridden')
@@ -36,11 +36,10 @@ export default function BriefingPage() {
 
   const generateBriefing = async () => {
     setLoading(true)
-    const threadIds = approvedThreads.map(t => t.id)
     const res = await fetch('/api/briefing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadIds }),
+      body: JSON.stringify({ threads: approvedThreads }),
     })
     const data: BriefingResponse = await res.json()
     if (data.sections) {

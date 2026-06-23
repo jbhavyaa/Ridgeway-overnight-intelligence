@@ -90,28 +90,30 @@ export default function Home() {
     setTimeout(() => { hasStarted.current = true; startInvestigation() }, 100)
   }
 
-  const handleApprove = async (threadId: string) => {
-    const res = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId, action: 'approve' }) })
-    const { thread } = await res.json()
-    setThreads(prev => prev.map(t => t.id === threadId ? thread : t))
+  const updateThreads = (updated: Thread[]) => {
+    setThreads(updated)
+    saveCache(updated)
   }
 
-  const handleChangeSeverity = async (threadId: string, severity: Severity) => {
-    const res = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId, action: 'change_severity', severity }) })
-    const { thread } = await res.json()
-    setThreads(prev => prev.map(t => t.id === threadId ? thread : t))
+  const handleApprove = (threadId: string) => {
+    updateThreads(threads.map(t => t.id === threadId ? { ...t, status: 'approved' as const } : t))
   }
 
-  const handleDismiss = async (threadId: string) => {
-    const res = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId, action: 'dismiss' }) })
-    const { thread } = await res.json()
-    setThreads(prev => prev.map(t => t.id === threadId ? thread : t))
+  const handleChangeSeverity = (threadId: string, severity: Severity) => {
+    updateThreads(threads.map(t => t.id === threadId ? { ...t, status: 'overridden' as const, overriddenSeverity: severity } : t))
+  }
+
+  const handleDismiss = (threadId: string) => {
+    updateThreads(threads.map(t => t.id === threadId ? { ...t, status: 'dismissed' as const } : t))
   }
 
   const handleDispatch = async (threadId: string, zone: string, reason: string) => {
-    const res = await fetch('/api/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threadId, zone, reason }) })
-    const { mission, thread } = await res.json()
-    setThreads(prev => prev.map(t => t.id === threadId ? thread : t))
+    const res = await fetch('/api/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone, reason }) })
+    const { mission } = await res.json()
+    updateThreads(threads.map(t => t.id === threadId
+      ? { ...t, dispatchedMissions: [...(t.dispatchedMissions ?? []), mission] }
+      : t
+    ))
     setNewDroneRoute(mission)
   }
 
