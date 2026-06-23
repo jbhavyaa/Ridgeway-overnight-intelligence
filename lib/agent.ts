@@ -1,9 +1,8 @@
-import Groq from 'groq-sdk'
-import type { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/chat/completions'
+import Anthropic from '@anthropic-ai/sdk'
 import { toolDefinitions, executeTool } from './tools'
 import { Signal, Thread, EvidenceItem } from './types'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM_PROMPT = `You are a security intelligence agent investigating overnight signals at an industrial site before the operator arrives each morning.
 
@@ -19,42 +18,41 @@ Rules:
 - Be willing to be wrong. State theories, not conclusions. Uncertainty is accuracy.
 - When you have gathered sufficient evidence, call submit_findings.`
 
-const submitFindingsTool: Groq.Chat.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'submit_findings',
-    description: 'Submit your final structured finding for this cluster. Call this when you have gathered sufficient evidence.',
-    parameters: {
-      type: 'object',
-      properties: {
-        hypothesis: { type: 'string', description: 'One sentence theory about what happened' },
-        confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
-        severity: { type: 'string', enum: ['noise', 'watch', 'escalate'] },
-        recommendation: { type: 'string', description: 'Dismiss, Dispatch drone to X, or Escalate to Nisha' },
-        unknowns: { type: 'array', items: { type: 'string' }, description: 'MANDATORY: what could not be verified, min 1 item' },
-        reasoning: { type: 'string', description: 'Brief explanation of which tools drove the conclusion' }
-      },
-      required: ['hypothesis', 'confidence', 'severity', 'recommendation', 'unknowns', 'reasoning']
-    }
+const submitFindingsTool: Anthropic.Tool = {
+  name: 'submit_findings',
+  description: 'Submit your final structured finding for this cluster. Call this when you have gathered sufficient evidence.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      hypothesis: { type: 'string', description: 'One sentence theory about what happened' },
+      confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+      severity: { type: 'string', enum: ['noise', 'watch', 'escalate'] },
+      recommendation: { type: 'string', description: 'Dismiss, Dispatch drone to X, or Escalate to Nisha' },
+      unknowns: { type: 'array', items: { type: 'string' }, description: 'MANDATORY: what could not be verified, min 1 item' },
+      reasoning: { type: 'string', description: 'Brief explanation of which tools drove the conclusion' }
+    },
+    required: ['hypothesis', 'confidence', 'severity', 'recommendation', 'unknowns', 'reasoning']
   }
 }
 
-function isDailyLimitError(err: unknown): boolean {
-  return String(err).includes('tokens per day') || String(err).includes('TPD')
-}
-
-async function callGroq(
-  params: ChatCompletionCreateParamsNonStreaming
-): Promise<Groq.Chat.ChatCompletion> {
+async function callClaude(
+  messages: Anthropic.MessageParam[],
+  tools: Anthropic.Tool[]
+): Promise<Anthropic.Message> {
   const MAX_RETRIES = 3
   let lastErr: unknown
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      return await groq.chat.completions.create(params)
+      return await anthropic.messages.create({
+        model: 'claude-opus-4-8',
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages,
+        tools,
+        tool_choice: { type: 'auto' },
+      })
     } catch (err) {
       lastErr = err
-      // Daily quota exhausted — retrying won't help, fail immediately
-      if (isDailyLimitError(err)) throw err
       if (attempt < MAX_RETRIES - 1) {
         await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
       }
@@ -97,8 +95,7 @@ async function runInvestigation(
     `- ${s.id} [${s.type}] at ${s.zone} (${s.ts}): ${JSON.stringify(s.payload)}`
   ).join('\n')
 
-  const messages: Groq.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+  const messages: Anthropic.MessageParam[] = [
     {
       role: 'user',
       content: `Investigate this cluster of ${signals.length} signal(s):\n\n${signalSummary}\n\nUse the available tools to gather context, then call submit_findings with your conclusion.`
@@ -117,53 +114,53 @@ async function runInvestigation(
   } | null = null
 
   for (let turn = 0; turn < 8; turn++) {
-    const response = await callGroq({
-      model: 'llama-3.3-70b-versatile',
-      messages,
-      tools: allTools,
-      tool_choice: 'auto',
-      temperature: 0
-    })
+    const response = await callClaude(messages, allTools)
 
-    const message = response.choices[0].message
-    messages.push(message)
+    // Push the assistant message
+    messages.push({ role: 'assistant', content: response.content })
 
-    if (!message.tool_calls || message.tool_calls.length === 0) break
+    // Extract tool use blocks
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    )
 
-    const toolResultMessages: Groq.Chat.ChatCompletionMessageParam[] = []
+    if (toolUseBlocks.length === 0) break
 
-    for (const toolCall of message.tool_calls) {
-      const args = JSON.parse(toolCall.function.arguments)
+    const toolResults: Anthropic.ToolResultBlockParam[] = []
 
-      if (toolCall.function.name === 'submit_findings') {
-        finding = args
-        toolResultMessages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
+    for (const toolBlock of toolUseBlocks) {
+      const { id, name, input } = toolBlock
+      const args = input as Record<string, unknown>
+
+      if (name === 'submit_findings') {
+        finding = args as unknown as typeof finding
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: id,
           content: 'Findings submitted successfully.'
         })
         break
       }
 
-      onToolCall?.(`  → calling ${toolCall.function.name}(${JSON.stringify(args)})`)
+      onToolCall?.(`  → calling ${name}(${JSON.stringify(args)})`)
 
       let result: unknown
       try {
-        result = await executeTool(toolCall.function.name, args)
+        result = await executeTool(name, args)
       } catch (err) {
         result = { error: String(err) }
       }
 
-      evidence.push({ tool: toolCall.function.name, input: args, result })
+      evidence.push({ tool: name, input: args, result })
 
-      toolResultMessages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: id,
         content: JSON.stringify(result)
       })
     }
 
-    messages.push(...toolResultMessages)
+    messages.push({ role: 'user', content: toolResults })
     if (finding) break
   }
 

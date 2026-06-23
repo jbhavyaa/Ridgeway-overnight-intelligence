@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import { Thread } from '@/lib/types'
-import Groq from 'groq-sdk'
+import Anthropic from '@anthropic-ai/sdk'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
   const { threads } = await req.json() as { threads: Thread[] }
@@ -27,14 +27,11 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean).join('\n')
   }).join('\n\n')
 
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    response_format: { type: 'json_object' },
+  const response = await anthropic.messages.create({
+    model: 'claude-opus-4-8',
+    max_tokens: 2048,
+    system: 'You are a security briefing writer. Use only the findings provided. Preserve all unknowns exactly as stated. Do not speculate beyond the evidence. You MUST respond with valid JSON only — no markdown, no prose outside the JSON object.',
     messages: [
-      {
-        role: 'system',
-        content: 'You are a security briefing writer. Use only the findings provided. Preserve all unknowns exactly as stated. Do not speculate beyond the evidence. You MUST respond with valid JSON only — no markdown, no prose outside the JSON object.',
-      },
       {
         role: 'user',
         content: `Using ONLY the following approved security findings, write a morning briefing for the site operations lead.
@@ -48,7 +45,7 @@ Return a JSON object with exactly these keys:
   "what_needs_followup": ["bullet string 1", "bullet string 2"]
 }
 
-IMPORTANT: Preserve all unknowns exactly as stated. Do not add context not in the findings.
+IMPORTANT: Preserve all unknowns exactly as stated. Do not add context not in the findings. Output ONLY the JSON object, nothing else.
 
 FINDINGS:
 ${findingsSummary}`,
@@ -56,12 +53,11 @@ ${findingsSummary}`,
     ],
   })
 
-  const raw = response.choices[0].message.content ?? '{}'
+  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
   try {
     const sections = JSON.parse(raw)
     return Response.json({ sections })
   } catch {
-    // Fallback: return raw text for backward compat
     return Response.json({ briefing: raw })
   }
 }

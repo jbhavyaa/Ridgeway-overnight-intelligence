@@ -1,96 +1,78 @@
-import Groq from 'groq-sdk'
+import Anthropic from '@anthropic-ai/sdk'
 import { getWeather, getAccessRecords, getShiftRoster, getZoneHistory, checkDroneCoverage, simulateDroneMission } from './seed/toolData'
 
-export const toolDefinitions: Groq.Chat.ChatCompletionTool[] = [
+export const toolDefinitions: Anthropic.Tool[] = [
   {
-    type: 'function',
-    function: {
-      name: 'get_weather',
-      description: 'Get wind and weather conditions for a zone at a given timestamp',
-      parameters: {
-        type: 'object',
-        properties: {
-          zone: { type: 'string' },
-          timestamp: { type: 'string', description: 'ISO timestamp' }
-        },
-        required: ['zone', 'timestamp']
-      }
+    name: 'get_weather',
+    description: 'Get wind and weather conditions for a zone at a given timestamp',
+    input_schema: {
+      type: 'object',
+      properties: {
+        zone: { type: 'string' },
+        timestamp: { type: 'string', description: 'ISO timestamp' }
+      },
+      required: ['zone', 'timestamp']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'get_access_records',
-      description: 'Get badge access records for an access point within a time window',
-      parameters: {
-        type: 'object',
-        properties: {
-          accessPoint: { type: 'string' },
-          windowStart: { type: 'string' },
-          windowEnd: { type: 'string' }
-        },
-        required: ['accessPoint', 'windowStart', 'windowEnd']
-      }
+    name: 'get_access_records',
+    description: 'Get badge access records for an access point within a time window',
+    input_schema: {
+      type: 'object',
+      properties: {
+        accessPoint: { type: 'string' },
+        windowStart: { type: 'string' },
+        windowEnd: { type: 'string' }
+      },
+      required: ['accessPoint', 'windowStart', 'windowEnd']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'get_shift_roster',
-      description: 'Get scheduled staff, contractors, and authorized vehicle movements for a date',
-      parameters: {
-        type: 'object',
-        properties: {
-          date: { type: 'string', description: 'YYYY-MM-DD' }
-        },
-        required: ['date']
-      }
+    name: 'get_shift_roster',
+    description: 'Get scheduled staff, contractors, and authorized vehicle movements for a date',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD' }
+      },
+      required: ['date']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'get_zone_history',
-      description: 'Get baseline activity frequency for a zone over the past N days',
-      parameters: {
-        type: 'object',
-        properties: {
-          zone: { type: 'string' },
-          lookbackDays: { type: 'number' }
-        },
-        required: ['zone', 'lookbackDays']
-      }
+    name: 'get_zone_history',
+    description: 'Get baseline activity frequency for a zone over the past N days',
+    input_schema: {
+      type: 'object',
+      properties: {
+        zone: { type: 'string' },
+        lookbackDays: { type: 'number' }
+      },
+      required: ['zone', 'lookbackDays']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'check_drone_coverage',
-      description: 'Check whether a drone patrol already covered a zone in a given window',
-      parameters: {
-        type: 'object',
-        properties: {
-          zone: { type: 'string' },
-          windowStart: { type: 'string' },
-          windowEnd: { type: 'string' }
-        },
-        required: ['zone', 'windowStart', 'windowEnd']
-      }
+    name: 'check_drone_coverage',
+    description: 'Check whether a drone patrol already covered a zone in a given window',
+    input_schema: {
+      type: 'object',
+      properties: {
+        zone: { type: 'string' },
+        windowStart: { type: 'string' },
+        windowEnd: { type: 'string' }
+      },
+      required: ['zone', 'windowStart', 'windowEnd']
     }
   },
   {
-    type: 'function',
-    function: {
-      name: 'dispatch_drone_mission',
-      description: 'Simulate a follow-up drone patrol to a zone and return observations and route',
-      parameters: {
-        type: 'object',
-        properties: {
-          zone: { type: 'string' },
-          reason: { type: 'string' }
-        },
-        required: ['zone', 'reason']
-      }
+    name: 'dispatch_drone_mission',
+    description: 'Simulate a follow-up drone patrol to a zone and return observations and route',
+    input_schema: {
+      type: 'object',
+      properties: {
+        zone: { type: 'string' },
+        reason: { type: 'string' }
+      },
+      required: ['zone', 'reason']
     }
   }
 ]
