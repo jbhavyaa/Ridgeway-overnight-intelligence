@@ -6,7 +6,7 @@ import { store } from '@/lib/store'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120
 
 function sseOnce(data: object): Response {
   return new Response(`data: ${JSON.stringify(data)}\n\n`, {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
         const clusters = clusterSignals(signals)
 
-        await Promise.all(clusters.map(async (cluster) => {
+        for (const cluster of clusters) {
           const sigIds = cluster.map(s => s.id).join(', ')
           send({ type: 'log', message: `── Investigating ${sigIds} ──` })
           try {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
           } catch (clusterErr) {
             send({ type: 'log', message: `ERROR: cluster failed — ${String(clusterErr)}` })
           }
-        }))
+        }
 
         store.setStatus('complete')
         send({ type: 'done', threads: store.getThreads() })

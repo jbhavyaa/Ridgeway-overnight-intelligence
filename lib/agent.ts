@@ -73,7 +73,7 @@ async function callClaude(
     try {
       return await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 600,
         temperature: 0,
         system: SYSTEM_PROMPT,
         messages,
@@ -237,7 +237,7 @@ async function runInvestigation(
     confidence: finding.confidence,
     severity: finding.severity,
     evidence,
-    unknowns: finding.unknowns.length > 0 ? finding.unknowns : ['No explicit unknowns stated'],
+    unknowns: (finding.unknowns?.length ?? 0) > 0 ? finding.unknowns : ['No explicit unknowns stated'],
     recommendation: finding.recommendation,
     status: 'ai_draft',
     dispatchedMissions: []
